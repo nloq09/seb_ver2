@@ -4,8 +4,11 @@ using System.Threading.Tasks;
 using System.Threading;
 using Newtonsoft.Json;
 using CefSharp;
-using CefSharp.WinForms.Handler;
-using CefSharp.WinForms.Host;
+using System.Collections.Generic;
+using System.Windows.Controls;
+using System.Windows.Media;
+using System.Windows.Media.Imaging;
+using CefSharp.OffScreen;
 using SafeExamBrowser.Browser.Wrapper;
 using SafeExamBrowser.UserInterface.Contracts.Browser;
 
@@ -14,7 +17,9 @@ namespace SafeExamBrowser.Browser
 	/// <summary>Hosts the website and submits a question only through an explicit user action.</summary>
 	internal sealed class ChatGptAssistant : IChatGptAssistant
 	{
-		private readonly CefSharpBrowserControl control;
+		private readonly ChromiumWebBrowser control;
+		private readonly Image preview;
+		private int framePending;
 		private readonly RequestContext requestContext;
 		private readonly Action<string> diagnostic;
 		private string navigationFailure;
@@ -32,9 +37,9 @@ namespace SafeExamBrowser.Browser
 			public bool CanInferComplete { get; set; }
 		}
 
-		public object EmbeddableControl => control;
-		public event Action HideAnswerRequested;
+		public object EmbeddableControl => preview;
 		public event Action<string> StatusChanged;
+		public event Action QuestionSent;
 
 		internal ChatGptAssistant(Func<string, bool> allowNavigation, Func<string, bool> allowResource)
 			: this(allowNavigation, allowResource, null)
@@ -46,37 +51,21 @@ namespace SafeExamBrowser.Browser
 			this.diagnostic = diagnostic;
 			// No cache path: cookies and login state are isolated from the exam and kept in memory.
 			requestContext = new RequestContext(new RequestContextSettings { PersistSessionCookies = false });
-			var lifeSpanHandler = LifeSpanHandler.Create(() => throw new InvalidOperationException("ChatGPT popups are disabled."))
-				.OnBeforePopupCreated((w, b, f, u, t, d, g, s) => OpenPopupInPanel(u, allowNavigation)).Build();
-
-			control = new CefSharpBrowserControl(lifeSpanHandler, "https://chatgpt.com/") { RequestContext = requestContext };
-			var shortcuts = new Handlers.KeyboardHandler { EnableChatGptShortcut = true };
-			shortcuts.ChatGptHideAnswerRequested += () => HideAnswerRequested?.Invoke();
-			control.PreKeyEvent += (IWebBrowser w, IBrowser b, KeyType type, int key, int nativeKey, CefEventFlags modifiers, bool systemKey, ref bool shortcut, Wrapper.Events.GenericEventArgs args) =>
+			preview = new Image { Focusable = false, IsHitTestVisible = false, Stretch = Stretch.Uniform };
+			control = new ChromiumWebBrowser("https://chatgpt.com/", requestContext: requestContext,
+				automaticallyCreateBrowser: false, useLegacyRenderHandler: false)
 			{
-				if (key == (int) System.Windows.Forms.Keys.H)
-					args.Value = shortcuts.OnPreKeyEvent(w, b, type, key, nativeKey, modifiers, systemKey, ref shortcut);
+				RequestHandler = new ChatRequestHandler(this, allowNavigation, allowResource),
+				LifeSpanHandler = new ChatLifeSpanHandler(),
+				DownloadHandler = new ChatDownloadHandler(),
+				DialogHandler = new ChatDialogHandler()
 			};
-			control.BeforeBrowse += (w, b, f, r, u, i, a) =>
+			preview.SizeChanged += (sender, args) =>
 			{
-				// Login widgets use blank child frames for messaging; these have no network destination.
-				if (!f.IsMain && (r.Url == "about:blank" || r.Url == "about:srcdoc")) return;
-				a.Value = !IsAllowedAddress(r.Url) || !allowNavigation(r.Url);
-				if (a.Value) ReportFailure("Điều hướng tới " + HostOf(r.Url) + " bị chặn bởi giới hạn ChatGPT hoặc bộ lọc URL của phiên.");
-				else if (f.IsMain)
-				{
-					navigationFailure = null;
-				}
+				if (!disposed && args.NewSize.Width >= 1 && args.NewSize.Height >= 1)
+					control.Size = new System.Drawing.Size((int) args.NewSize.Width, (int) args.NewSize.Height);
 			};
-			control.ResourceRequestHandlerRequired += (IWebBrowser w, IBrowser b, IFrame f, IRequest r, bool n, bool d, string i, ref bool h, Wrapper.Events.ResourceRequestEventArgs a) =>
-			{
-				a.Handler = new ResourcePolicy(allowResource, url => ReportFailure("Bộ lọc URL của phiên chặn tài nguyên từ " + HostOf(url) + "."));
-			};
-			control.OpenUrlFromTab += (w, b, f, u, t, g, a) => { OpenPopupInPanel(u, allowNavigation); a.Value = true; };
-			control.BeforeContextMenu += (w, b, f, p, m) => m.Clear();
-			control.CanDownload += (w, b, u, r, a) => a.Value = false;
-			control.BeforeDownload += (w, b, d, c, a) => { c.Dispose(); a.Value = true; return true; };
-			control.FileDialogRequested += (w, b, m, t, p, f, e, d, c) => { using (c) c.Cancel(); };
+			control.Paint += PaintPreview;
 			control.LoadError += (s, e) =>
 			{
 				if (e.Frame.IsMain && e.ErrorCode != CefErrorCode.Aborted)
@@ -92,18 +81,23 @@ namespace SafeExamBrowser.Browser
 				if (!e.IsLoading && navigationFailure == null)
 					StatusChanged?.Invoke("Có thể hỏi khi ô chat hiện ra, kể cả chưa đăng nhập. Nhấn Dán & gửi để gửi câu hỏi.");
 			};
+			control.CreateBrowser();
 		}
 
-		private PopupCreation OpenPopupInPanel(string address, Func<string, bool> allowNavigation)
+		private void PaintPreview(object sender, OnPaintEventArgs e)
 		{
-			if (!disposed && IsAllowedAddress(address) && allowNavigation(address))
+			if (disposed || e.IsPopup || e.Width <= 0 || e.Height <= 0) return;
+			if (Interlocked.Exchange(ref framePending, 1) != 0) return;
+
+			var stride = e.Width * 4;
+			var frame = BitmapSource.Create(e.Width, e.Height, 96, 96, PixelFormats.Pbgra32, null,
+				e.BufferHandle, stride * e.Height, stride);
+			frame.Freeze();
+			preview.Dispatcher.BeginInvoke((Action) (() =>
 			{
-				// Keep authentication in the same request context instead of silently dropping window.open.
-				control.BeginInvoke((Action) (() => { if (!disposed) control.Load(address); }));
-			}
-			else
-				ReportFailure("Cửa sổ tới " + HostOf(address) + " bị chặn. Hãy dùng luồng đăng nhập email trong khung ChatGPT.");
-			return PopupCreation.Cancel;
+				Interlocked.Exchange(ref framePending, 0);
+				if (!disposed) preview.Source = frame;
+			}));
 		}
 
 		private void ReportFailure(string message)
@@ -143,38 +137,31 @@ const text = new TextDecoder().decode(Uint8Array.from(atob('" + encoded + @"'), 
 		{
 			if (disposed || string.IsNullOrWhiteSpace(prompt) || prompt.Length > 12000) return false;
 			var findEditor = BuildEditorScript(prompt);
-			var focusScript = "(function () {" + findEditor + @"
-  const editor = findEditor();
-  if (!editor) return 'missing';
-  const existing = editor.value || editor.innerText || '';
-  if (normalized(existing).endsWith(normalized(text))) return 'already';
-  editor.focus();
-  if (editor.tagName === 'TEXTAREA') editor.setSelectionRange(existing.length, existing.length);
-  else {
-    const range = document.createRange(); range.selectNodeContents(editor); range.collapse(false);
-    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-  }
-  return existing.trim() ? 'append' : 'ready';
-})()";
 			var verifyScript = "(function () {" + findEditor + @"
   const editor = findEditor();
   return !!editor && normalized(editor.value || editor.innerText).endsWith(normalized(text));
 })()";
-			var fallbackScript = "(function () {" + findEditor + @"
+			var insertScript = "(function () {" + findEditor + @"
   const editor = findEditor();
   if (!editor) return false;
   const existing = editor.value || editor.innerText || '';
   if (normalized(existing).endsWith(normalized(text))) return true;
-  editor.focus();
   if (editor.tagName === 'TEXTAREA') {
     const next = existing.trim() ? existing + '\n\n' + text : text;
     Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(editor, next);
     editor.dispatchEvent(new Event('input', { bubbles: true }));
     editor.dispatchEvent(new Event('change', { bubbles: true }));
   } else {
-    const range = document.createRange(); range.selectNodeContents(editor); range.collapse(false);
-    const selection = window.getSelection(); selection.removeAllRanges(); selection.addRange(range);
-    document.execCommand('insertText', false, (existing.trim() ? '\n\n' : '') + text);
+    const draft = document.createDocumentFragment();
+    if (existing.trim()) draft.append(document.createElement('p'));
+    for (const line of text.split(/\r?\n/)) {
+      const paragraph = document.createElement('p');
+      paragraph.append(line ? document.createTextNode(line) : document.createElement('br'));
+      draft.append(paragraph);
+    }
+    if (existing.trim()) editor.append(draft);
+    else editor.replaceChildren(draft);
+    editor.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
   }
   return normalized(editor.value || editor.innerText).endsWith(normalized(text));
 })()";
@@ -197,39 +184,13 @@ const text = new TextDecoder().decode(Uint8Array.from(atob('" + encoded + @"'), 
 							}
 							else if (onChat)
 							{
-								if (control.Visible) control.GetBrowser().GetHost().SetFocus(true);
-								var focus = await EvaluateSafelyAsync(frame, focusScript, timeout: TimeSpan.FromSeconds(2));
-								var state = focus.Success ? focus.Result as string : null;
-								if (state == "already") return true;
-								if (state == "ready" || state == "append")
+								var insertion = await EvaluateSafelyAsync(frame, insertScript, timeout: TimeSpan.FromSeconds(2));
+								if (insertion.Success && insertion.Result is bool inserted && inserted)
 								{
-									// Chromium text input updates React/ProseMirror without using the system clipboard.
-									if (control.Visible)
-									{
-										using (var client = control.GetDevToolsClient())
-										{
-											var insertion = client.Input.InsertTextAsync((state == "append" ? "\n\n" : "") + prompt);
-											if (await Task.WhenAny(insertion, Task.Delay(3000)) != insertion || !(await insertion).Success) return false;
-										}
-									}
 									await Task.Delay(350);
 									if (disposed || !frame.IsValid) return false;
 									var verification = await EvaluateSafelyAsync(frame, verifyScript, timeout: TimeSpan.FromSeconds(2));
-									var inserted = verification.Success && verification.Result is bool present && present;
-									if (!inserted)
-									{
-										var fallback = await EvaluateSafelyAsync(frame, fallbackScript);
-										await Task.Delay(200);
-										var fallbackCheck = await EvaluateSafelyAsync(frame, verifyScript);
-										inserted = fallback.Success && fallbackCheck.Success && fallbackCheck.Result is bool pasted && pasted;
-									}
-									if (inserted)
-									{
-										await Task.Delay(350);
-										if (disposed || !frame.IsValid) return false;
-										var stable = await EvaluateSafelyAsync(frame, verifyScript, timeout: TimeSpan.FromSeconds(2));
-										if (stable.Success && stable.Result is bool remains && remains) return true;
-									}
+									if (verification.Success && verification.Result is bool present && present) return true;
 								}
 							}
 						}
@@ -328,6 +289,7 @@ const text = new TextDecoder().decode(Uint8Array.from(atob('" + encoded + @"'), 
 				before = await ReadConversationAsync();
 				cancellationToken.ThrowIfCancellationRequested();
 				if (!await SendPreparedPromptAsync(prompt, cancellationToken)) return AnswerFailure(kind, "Câu hỏi đã dán nhưng ChatGPT chưa xác nhận gửi.");
+				QuestionSent?.Invoke();
 				StatusChanged?.Invoke("Đã gửi. Đang đợi ChatGPT trả lời xong...");
 				var deadline = DateTime.UtcNow.AddSeconds(120);
 				string stableText = null;
@@ -409,6 +371,77 @@ const text = new TextDecoder().decode(Uint8Array.from(atob('" + encoded + @"'), 
 				|| uri.Host == "cdn.platform.openai.com"
 				|| uri.Host == "auth.openai.com" || uri.Host.EndsWith(".auth.openai.com", StringComparison.OrdinalIgnoreCase) || uri.Host == "auth0.openai.com"
 				|| uri.Host == "challenges.cloudflare.com";
+		}
+
+		private sealed class ChatRequestHandler : CefSharp.Handler.RequestHandler
+		{
+			private readonly ChatGptAssistant assistant;
+			private readonly Func<string, bool> allowNavigation;
+			private readonly Func<string, bool> allowResource;
+
+			internal ChatRequestHandler(ChatGptAssistant assistant, Func<string, bool> allowNavigation, Func<string, bool> allowResource)
+			{
+				this.assistant = assistant;
+				this.allowNavigation = allowNavigation;
+				this.allowResource = allowResource;
+			}
+
+			protected override bool OnBeforeBrowse(IWebBrowser webBrowser, IBrowser browser, IFrame frame, IRequest request,
+				bool userGesture, bool isRedirect)
+			{
+				if (!frame.IsMain && (request.Url == "about:blank" || request.Url == "about:srcdoc")) return false;
+				if (IsAllowedAddress(request.Url) && allowNavigation(request.Url))
+				{
+					assistant.navigationFailure = null;
+					return false;
+				}
+
+				assistant.ReportFailure("Điều hướng tới " + HostOf(request.Url) + " bị chặn bởi bộ lọc URL của phiên.");
+				return true;
+			}
+
+			protected override bool OnOpenUrlFromTab(IWebBrowser webBrowser, IBrowser browser, IFrame frame, string targetUrl,
+				WindowOpenDisposition disposition, bool userGesture) => true;
+
+			protected override IResourceRequestHandler GetResourceRequestHandler(IWebBrowser webBrowser, IBrowser browser, IFrame frame,
+				IRequest request, bool isNavigation, bool isDownload, string requestInitiator, ref bool disableDefaultHandling)
+			{
+				return new ResourcePolicy(allowResource,
+					url => assistant.ReportFailure("Bộ lọc URL của phiên chặn tài nguyên từ " + HostOf(url) + "."));
+			}
+		}
+
+		private sealed class ChatLifeSpanHandler : CefSharp.Handler.LifeSpanHandler
+		{
+			protected override bool OnBeforePopup(IWebBrowser webBrowser, IBrowser browser, IFrame frame, string targetUrl,
+				string targetFrameName, WindowOpenDisposition disposition, bool userGesture, IPopupFeatures popupFeatures,
+				IWindowInfo windowInfo, IBrowserSettings browserSettings, ref bool noJavascriptAccess, out IWebBrowser newBrowser)
+			{
+				newBrowser = null;
+				return true;
+			}
+		}
+
+		private sealed class ChatDownloadHandler : CefSharp.Handler.DownloadHandler
+		{
+			protected override bool CanDownload(IWebBrowser webBrowser, IBrowser browser, string url, string requestMethod) => false;
+
+			protected override bool OnBeforeDownload(IWebBrowser webBrowser, IBrowser browser, DownloadItem item, IBeforeDownloadCallback callback)
+			{
+				callback.Dispose();
+				return true;
+			}
+		}
+
+		private sealed class ChatDialogHandler : CefSharp.Handler.DialogHandler
+		{
+			protected override bool OnFileDialog(IWebBrowser webBrowser, IBrowser browser, CefFileDialogMode mode, string title,
+				string defaultFilePath, IReadOnlyCollection<string> filters, IReadOnlyCollection<string> extensions,
+				IReadOnlyCollection<string> descriptions, IFileDialogCallback callback)
+			{
+				using (callback) callback.Cancel();
+				return true;
+			}
 		}
 
 		private sealed class ResourcePolicy : CefSharp.Handler.ResourceRequestHandler

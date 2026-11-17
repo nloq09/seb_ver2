@@ -323,7 +323,7 @@ namespace SafeExamBrowser.Browser
 		{
 			var warning = logger.LogLevel == LogLevel.Warning;
 			var error = logger.LogLevel == LogLevel.Error;
-			var cefSettings = new CefSettings();
+			var cefSettings = new CefSettings { WindowlessRenderingEnabled = true };
 
 			cefSettings.AcceptLanguageList = CultureInfo.CurrentUICulture.Name;
 			cefSettings.CachePath = appConfig.BrowserCachePath;

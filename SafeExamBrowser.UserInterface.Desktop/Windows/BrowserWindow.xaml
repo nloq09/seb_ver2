@@ -146,7 +146,8 @@
                             <TextBox x:Name="ChatGptAnswerBox" ContextMenu="{x:Null}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="72" AutomationProperties.Name="Câu trả lời đã chuẩn hóa" />
                         </StackPanel>
                     </Expander>
-                    <WindowsFormsHost x:Name="ChatGptControlHost" Grid.Row="5" />
+                    <ContentControl x:Name="ChatGptControlHost" Grid.Row="5" Focusable="False" IsHitTestVisible="False"
+                                    HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch" />
                 </Grid>
                 <Button x:Name="RestoreChatGptButton" Grid.Column="2" Visibility="Collapsed" Content="›" FontSize="18" ToolTip="Mở lại khung ChatGPT" Height="32" VerticalAlignment="Top" Margin="2" Click="RestoreChatGpt_Click" />
             </Grid>
@@ -173,11 +174,19 @@
                 </Button>
             </Grid>
         </Border>
-        <Border x:Name="ChoiceAnswerBadge" Grid.Row="3" HorizontalAlignment="Right"
-                Margin="8,4" Padding="12,4" CornerRadius="4" Background="#18324B"
-                Visibility="Collapsed" ToolTip="Ctrl + Shift + H để ẩn đáp án">
-            <TextBlock x:Name="ChoiceAnswerText" Foreground="White" FontSize="16" FontWeight="SemiBold"
-                       AutomationProperties.Name="Đáp án trắc nghiệm" />
-        </Border>
+        <StackPanel Grid.Row="3" HorizontalAlignment="Right" Orientation="Horizontal">
+            <Border x:Name="ChatGptFeedbackBadge" Margin="4,2" Padding="4,2" CornerRadius="3"
+                    Background="#EDF2F6" Visibility="Collapsed" VerticalAlignment="Center"
+                    ToolTip="{Binding Text, ElementName=ChatGptStatus}">
+                <TextBlock x:Name="ChatGptFeedbackText" FontSize="8" Foreground="#425466"
+                           AutomationProperties.LiveSetting="Polite" />
+            </Border>
+            <Border x:Name="ChoiceAnswerBadge" HorizontalAlignment="Right"
+                    Margin="8,4" Padding="12,4" CornerRadius="4" Background="#18324B"
+                    Visibility="Collapsed" ToolTip="Ctrl + Shift + H để ẩn đáp án">
+                <TextBlock x:Name="ChoiceAnswerText" Foreground="White" FontSize="16" FontWeight="SemiBold"
+                           AutomationProperties.Name="Đáp án trắc nghiệm" />
+            </Border>
+        </StackPanel>
     </Grid>
 </Window>

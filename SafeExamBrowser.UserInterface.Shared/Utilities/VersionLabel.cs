@@ -10,7 +10,7 @@ namespace SafeExamBrowser.UserInterface.Shared.Utilities
 
 			if (version?.EndsWith(suffix, StringComparison.Ordinal) == true)
 			{
-				return version.Substring(0, version.Length - suffix.Length) + " (custom build)";
+				return version.Substring(0, version.Length - suffix.Length);
 			}
 
 			return version;

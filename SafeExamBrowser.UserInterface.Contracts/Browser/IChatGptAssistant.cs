@@ -17,8 +17,8 @@ namespace SafeExamBrowser.UserInterface.Contracts.Browser
 	public interface IChatGptAssistant : IDisposable
 	{
 		object EmbeddableControl { get; }
-		event Action HideAnswerRequested;
 		event Action<string> StatusChanged;
+		event Action QuestionSent;
 		Task<bool> PreparePromptAsync(string prompt);
 		Task<bool> SendPreparedPromptAsync(string prompt);
 		Task<ChatGptAnswer> AskQuestionAsync(string question, ChatGptQuestionKind kind, CancellationToken cancellationToken);
