@@ -33,6 +33,7 @@ namespace SafeExamBrowser.Browser.UnitTests.Handlers
 			sut.EnableChatGptShortcut = true;
 			sut.ChatGptRequested += () => Assert.Fail("Unexpected open action");
 			sut.ChatGptQueryRequested += () => Assert.Fail("Unexpected send action");
+			sut.ChatGptEssayRequested += () => Assert.Fail("Unexpected essay action");
 			sut.ChatGptHideAnswerRequested += () => hidden++;
 
 			Assert.IsTrue(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.H, 0, modifiers, false, ref shortcut));
@@ -58,6 +59,55 @@ namespace SafeExamBrowser.Browser.UnitTests.Handlers
 			sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.K, 1 << 30, modifiers, false, ref shortcut);
 			Assert.AreEqual(1, opened);
 			Assert.AreEqual(1, queried);
+		}
+
+		[TestMethod]
+		[DataRow((int) Keys.K)]
+		[DataRow((int) Keys.Y)]
+		public void MustSendOnlyTheRequestedQuestionKindOnce(int key)
+		{
+			var multipleChoice = 0;
+			var essay = 0;
+			var shortcut = false;
+			var modifiers = CefEventFlags.ControlDown | CefEventFlags.ShiftDown;
+			sut.EnableChatGptShortcut = true;
+			sut.ChatGptRequested += () => Assert.Fail("Unexpected open action");
+			sut.ChatGptHideAnswerRequested += () => Assert.Fail("Unexpected hide action");
+			sut.ChatGptQueryRequested += () => multipleChoice++;
+			sut.ChatGptEssayRequested += () => essay++;
+			sut.FocusAddressBarRequested += () => Assert.Fail("Submission must keep focus in the question");
+
+			Assert.IsTrue(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, key, 0, modifiers, false, ref shortcut));
+			Assert.IsTrue(shortcut);
+			sut.OnPreKeyEvent(null, null, KeyType.KeyDown, key, 0, modifiers, false, ref shortcut);
+			sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, key, 1 << 30, modifiers, false, ref shortcut);
+			sut.OnKeyEvent(null, null, KeyType.KeyUp, key, 0, modifiers, false);
+			Assert.AreEqual(key == (int) Keys.K ? 1 : 0, multipleChoice);
+			Assert.AreEqual(key == (int) Keys.Y ? 1 : 0, essay);
+		}
+
+		[TestMethod]
+		public void MustIgnoreDisabledOrModifiedEssayShortcut()
+		{
+			var shortcut = false;
+			sut.ChatGptEssayRequested += () => Assert.Fail("Unexpected essay action");
+			Assert.IsFalse(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.Y, 0, CefEventFlags.ControlDown | CefEventFlags.ShiftDown, false, ref shortcut));
+			sut.EnableChatGptShortcut = true;
+			Assert.IsFalse(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.Y, 0, CefEventFlags.ControlDown, false, ref shortcut));
+			Assert.IsFalse(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.Y, 0, CefEventFlags.ControlDown | CefEventFlags.ShiftDown | CefEventFlags.AltDown, false, ref shortcut));
+		}
+
+		[TestMethod]
+		public void MustPreserveAddressBarShortcut()
+		{
+			var focused = 0;
+			sut.EnableChatGptShortcut = true;
+			sut.FocusAddressBarRequested += () => focused++;
+			sut.OnKeyEvent(null, null, KeyType.KeyUp, (int) Keys.L, 0, CefEventFlags.ControlDown, false);
+			Assert.AreEqual(1, focused);
+			sut.EnableChatGptShortcut = false;
+			sut.OnKeyEvent(null, null, KeyType.KeyUp, (int) Keys.L, 0, CefEventFlags.ControlDown | CefEventFlags.ShiftDown, false);
+			Assert.AreEqual(2, focused);
 		}
 
 		[TestMethod]

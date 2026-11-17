@@ -9,6 +9,20 @@ namespace SafeExamBrowser.Browser.UnitTests
 		private const string Question = "2 + 2 = ?\nA. 3\nB. 4\nC. 5";
 
 		[TestMethod]
+		public void MustUseSeparatePromptsForExplicitQuestionKinds()
+		{
+			var multipleChoice = QuestionAnswerFormatter.BuildPrompt("Câu hỏi không có nhãn", ChatGptQuestionKind.MultipleChoice);
+			var essay = QuestionAnswerFormatter.BuildPrompt(Question, ChatGptQuestionKind.Essay);
+			StringAssert.StartsWith(multipleChoice, "Giải câu trắc nghiệm sau.");
+			StringAssert.Contains(multipleChoice, "CHỈ trả lời nhãn đáp án");
+			StringAssert.Contains(multipleChoice, "bằng tiếng Việt");
+			StringAssert.EndsWith(multipleChoice, "Câu hỏi không có nhãn");
+			StringAssert.StartsWith(essay, "Trả lời câu tự luận sau bằng tiếng Việt");
+			StringAssert.Contains(essay, "chỉ viết nội dung câu trả lời hoàn chỉnh");
+			StringAssert.EndsWith(essay, Question);
+		}
+
+		[TestMethod]
 		public void MustDetectChoicesAndRespectExplicitEssayMode()
 		{
 			Assert.AreEqual(ChatGptQuestionKind.MultipleChoice, QuestionAnswerFormatter.ResolveKind(Question, ChatGptQuestionKind.Automatic));

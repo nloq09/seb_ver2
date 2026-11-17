@@ -2,7 +2,7 @@
 
 This integration is based on the upstream `v3.10.0` tag, matching the SEB 3.10.0 base used by the installed official build. Its original configuration/defaults and blocked-application list are unchanged. Runtime and Client identify this custom build as `3.10.0`; it is not the signed official distribution.
 
-This fork can host the ChatGPT website in a separate desktop browser panel. It uses the user's ChatGPT account, without an API key or a custom backend. ChatGPT starts loading in the background after the desktop browser window opens, with the panel initially hidden. Select a question and press **Ctrl + Shift + K** to send it after the website is ready. Press **Ctrl + Shift + J** to view the panel. Initialization failures are reported in the Client log and can be retried with either shortcut. The Mobile UI does not have this panel.
+This fork can host the ChatGPT website in a separate desktop browser panel. It uses the user's ChatGPT account, without an API key or a custom backend. ChatGPT starts loading in the background after the desktop browser window opens, with the panel initially hidden. Select a question and press **Ctrl + Shift + K** for multiple choice or **Ctrl + Shift + Y** for an essay after the website is ready. Press **Ctrl + Shift + J** to view the panel. Initialization failures are reported in the Client log and can be retried with any of these shortcuts. The Mobile UI does not have this panel.
 
 ## Configuration compatibility
 
@@ -21,13 +21,13 @@ OpenAI's [login troubleshooting guidance](https://help.openai.com/en/articles/74
 ## Use
 
 1. Wait for ChatGPT to load in the background. Press **Ctrl + Shift + J** to inspect its loading status if needed.
-2. Select the question and its choices on the practice page, then press **Ctrl + Shift + K**. SEB submits through the ChatGPT session and keeps the panel in its current open, collapsed, or hidden state.
+2. Select the question on the practice page. Press **Ctrl + Shift + K** to send it with the multiple-choice prompt, which asks for answer labels such as B or A, C. Press **Ctrl + Shift + Y** to send it with the essay prompt, which asks for a complete plain-text answer in Vietnamese. Each shortcut selects its question type explicitly. SEB keeps the panel in its current open, collapsed, or hidden state.
 3. Multiple-choice labels A–D appear at the bottom right. Press **Ctrl + Shift + H** to hide them. A new answer appears when the next question completes. Essay answers are converted to plain text and copied automatically when the session clipboard policy permits.
 4. Use **Ctrl + V** in an allowed field. With an isolated clipboard, paste works inside SEB. If copying is blocked, the answer remains visible in the panel.
 
-A small status badge at the bottom right acknowledges **Ctrl + Shift + K**, shows submission progress, and confirms when ChatGPT accepts the message. Completion and error feedback disappear after three seconds. Hover over the badge to read the detailed status.
+A small status badge at the bottom right acknowledges **Ctrl + Shift + K** and **Ctrl + Shift + Y**, shows submission progress, and confirms when ChatGPT accepts the message. Completion and error feedback disappear after three seconds. Hover over the badge to read the detailed status.
 
-The type selector lets you override automatic detection. To edit a question before sending, enter it in the preview and click **Dán & gửi**.
+The type selector controls **Dán & gửi**, including automatic detection when selected. To edit a question before sending, enter it in the preview and click **Dán & gửi**. Keyboard shortcuts use their assigned type.
 
 The panel starts at approximately 340 logical pixels wide (smaller on narrow windows). Drag the divider to resize. **−** collapses it to a 32-pixel strip; **›** restores it with the current draft and browser session intact. The question preview is 56 pixels high to leave more room for chat. Closing the panel hides it entirely; **Ctrl + Shift + J** opens it again.
 

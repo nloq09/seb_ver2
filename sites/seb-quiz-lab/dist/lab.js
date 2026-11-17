@@ -71,7 +71,7 @@ window.addEventListener('pageshow', () => updatePresence('pageshow'));
 window.addEventListener('keydown', event => {
   if (!attempt || event.repeat || event.isComposing || !event.ctrlKey || !event.shiftKey || event.altKey || event.metaKey) return;
   const key = event.key.toUpperCase();
-  if (key === 'J' || key === 'K' || key === 'H') {
+  if (key === 'J' || key === 'K' || key === 'Y' || key === 'H') {
     record('shortcut', { shortcut: 'Ctrl + Shift + ' + key });
   }
 }, { capture: true });

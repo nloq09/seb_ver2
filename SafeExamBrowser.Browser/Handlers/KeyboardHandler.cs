@@ -18,6 +18,7 @@ namespace SafeExamBrowser.Browser.Handlers
 		internal event ActionRequestedEventHandler FindRequested;
 		internal event ActionRequestedEventHandler ChatGptRequested;
 		internal event ActionRequestedEventHandler ChatGptQueryRequested;
+		internal event ActionRequestedEventHandler ChatGptEssayRequested;
 		internal event ActionRequestedEventHandler ChatGptHideAnswerRequested;
 		internal bool EnableChatGptShortcut { get; set; }
 		// Bit 30 of the Windows key message is set if the key was already down.
@@ -81,7 +82,7 @@ namespace SafeExamBrowser.Browser.Handlers
 
 		public bool OnPreKeyEvent(IWebBrowser browserControl, IBrowser browser, KeyType type, int keyCode, int nativeKeyCode, CefEventFlags modifiers, bool isSystemKey, ref bool isKeyboardShortcut)
 		{
-			if (EnableChatGptShortcut && (keyCode == (int) Keys.J || keyCode == (int) Keys.K || keyCode == (int) Keys.H))
+			if (EnableChatGptShortcut && (keyCode == (int) Keys.J || keyCode == (int) Keys.K || keyCode == (int) Keys.Y || keyCode == (int) Keys.H))
 			{
 				if ((type == KeyType.RawKeyDown || type == KeyType.KeyDown)
 					&& modifiers.HasFlag(CefEventFlags.ControlDown) && modifiers.HasFlag(CefEventFlags.ShiftDown)
@@ -93,6 +94,7 @@ namespace SafeExamBrowser.Browser.Handlers
 					{
 						if (keyCode == (int) Keys.J) ChatGptRequested?.Invoke();
 						else if (keyCode == (int) Keys.K) ChatGptQueryRequested?.Invoke();
+						else if (keyCode == (int) Keys.Y) ChatGptEssayRequested?.Invoke();
 						else ChatGptHideAnswerRequested?.Invoke();
 					}
 					return true;

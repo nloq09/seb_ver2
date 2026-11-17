@@ -31,6 +31,7 @@ namespace SafeExamBrowser.UserInterface.Contracts.Browser
 		bool CanUseChatGpt { get; }
 		event Action ChatGptRequested;
 		event Action ChatGptQueryRequested;
+		event Action ChatGptEssayRequested;
 		event Action ChatGptHideAnswerRequested;
 		IChatGptAssistant CreateChatGptAssistant();
 		Task<string> GetSelectedTextAsync();

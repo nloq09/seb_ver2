@@ -25,7 +25,7 @@ namespace SafeExamBrowser.Browser
 		{
 			kind = ResolveKind(question, kind);
 			var instruction = kind == ChatGptQuestionKind.MultipleChoice
-				? "Giải câu trắc nghiệm sau. CHỈ trả lời nhãn đáp án, ví dụ B; nếu có nhiều đáp án thì A, C. Không giải thích, không nhắc lại đề, không Markdown. Chỉ dùng nhãn có trong đề. Nếu đề không có nhãn thì chỉ ghi nội dung đáp án ngắn gọn."
+				? "Giải câu trắc nghiệm sau. CHỈ trả lời nhãn đáp án, ví dụ B; nếu có nhiều đáp án thì A, C. Không giải thích, không nhắc lại đề, không Markdown. Chỉ dùng nhãn có trong đề. Nếu đề không có nhãn thì chỉ ghi nội dung đáp án ngắn gọn bằng tiếng Việt."
 				: "Trả lời câu tự luận sau bằng tiếng Việt, chỉ viết nội dung câu trả lời hoàn chỉnh để có thể dán vào ô trả lời. Dùng văn bản thuần, xuống dòng hợp lý, không Markdown, không lời mở đầu như 'Dưới đây là', không nhắc lại đề. Giữ công thức và các bước cần thiết nếu đề yêu cầu.";
 			return instruction + " Nếu thiếu dữ kiện hoặc không xác định được, chỉ trả lời CHƯA_ĐỦ_DỮ_KIỆN.\n\nĐỀ BÀI:\n" + question;
 		}

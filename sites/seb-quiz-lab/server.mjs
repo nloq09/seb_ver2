@@ -15,7 +15,7 @@ const files = new Map([
 ]);
 const types = new Set(['started', 'viewed', 'answered', 'stopped', 'resumed', 'submitted', 'shortcut']);
 const signals = new Set(['blur', 'focus', 'visibilitychange', 'pagehide', 'pageshow']);
-const shortcuts = new Set(['Ctrl + Shift + J', 'Ctrl + Shift + K', 'Ctrl + Shift + H']);
+const shortcuts = new Set(['Ctrl + Shift + J', 'Ctrl + Shift + K', 'Ctrl + Shift + Y', 'Ctrl + Shift + H']);
 
 function send(response, status, contentType, body = '') {
   response.writeHead(status, {
