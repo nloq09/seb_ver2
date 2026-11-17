@@ -63,6 +63,7 @@
     <Compile Include="Browser\Events\LoadingStateChangedEventHandler.cs" />
     <Compile Include="Browser\Events\TitleChangedEventHandler.cs" />
     <Compile Include="Browser\IBrowserControl.cs" />
+    <Compile Include="Browser\IChatGptAssistant.cs" />
     <Compile Include="Browser\IBrowserWindow.cs" />
     <Compile Include="Events\ActionRequestedEventHandler.cs" />
     <Compile Include="FileSystemDialog\FileSystemDialogResult.cs" />

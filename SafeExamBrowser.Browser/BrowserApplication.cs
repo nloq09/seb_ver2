@@ -76,10 +76,11 @@ namespace SafeExamBrowser.Browser
 			INativeMethods nativeMethods,
 			SessionMode sessionMode,
 			IText text,
-			IUserInterfaceFactory uiFactory)
+			IUserInterfaceFactory uiFactory,
+			SafeExamBrowser.Settings.Security.ClipboardPolicy? clipboardPolicy = null)
 		{
 			this.appConfig = appConfig;
-			this.clipboard = new Clipboard(logger.CloneFor(nameof(Clipboard)), settings);
+			this.clipboard = new Clipboard(logger.CloneFor(nameof(Clipboard)), settings, clipboardPolicy);
 			this.fileSystemDialog = fileSystemDialog;
 			this.hashAlgorithm = hashAlgorithm;
 			this.keyGenerator = keyGenerator;

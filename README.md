@@ -2,6 +2,8 @@
 
 Refactored version of Safe Exam Browser for Windows with Chromium as integrated browser engine.
 
+This fork includes a [ChatGPT desktop panel prototype](docs/chatgpt-panel.md) for selecting a question and preparing it in the ChatGPT website. It uses existing `.seb` files without custom configuration keys. See the guide for usage and limitations.
+
 ## Requirements
 
 > [!NOTE]  

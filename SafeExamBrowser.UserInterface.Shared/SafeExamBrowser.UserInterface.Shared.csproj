@@ -80,6 +80,7 @@
     <Compile Include="Utilities\Parser.cs" />
     <Compile Include="Utilities\Thumbnail.cs" />
     <Compile Include="Utilities\VisualExtensions.cs" />
+    <Compile Include="Utilities\VersionLabel.cs" />
     <Compile Include="Utilities\WindowExtensions.cs" />
     <Compile Include="WindowGuard.cs" />
   </ItemGroup>

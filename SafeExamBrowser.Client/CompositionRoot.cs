@@ -272,7 +272,8 @@ namespace SafeExamBrowser.Client
 				nativeMethods,
 				context.Settings.SessionMode,
 				text,
-				uiFactory);
+				uiFactory,
+				context.Settings.Security.ClipboardPolicy);
 			var operation = new BrowserOperation(actionCenter, context, logger, taskbar, taskview, uiFactory);
 
 			context.Browser = browser;

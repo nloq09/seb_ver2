@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2025 ETH Zürich, IT Services
  * 
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -19,8 +19,68 @@ using SafeExamBrowser.UserInterface.Contracts.Browser.Events;
 
 namespace SafeExamBrowser.Browser
 {
-	internal class BrowserControl : IBrowserControl
+	internal class BrowserControl : IBrowserControl, IChatGptHost
 	{
+		private readonly Func<IChatGptAssistant> assistantFactory;
+		private IChatGptAssistant assistant;
+		public bool CanUseChatGpt => assistantFactory != null;
+		public event Action ChatGptRequested;
+		public event Action ChatGptQueryRequested;
+		public event Action ChatGptHideAnswerRequested;
+
+		public Task<bool> CopyAnswerAsync(string text)
+		{
+			return clipboard == null ? Task.FromResult(false) : clipboard.CopyAnswerAsync(text);
+		}
+
+		public IChatGptAssistant CreateChatGptAssistant()
+		{
+			if (!CanUseChatGpt) throw new InvalidOperationException("ChatGPT is disabled for this session.");
+			return assistant ?? (assistant = assistantFactory());
+		}
+
+		public async Task<string> GetSelectedTextAsync()
+		{
+			if (!control.IsBrowserInitialized) return string.Empty;
+			var browser = control.BrowserCore;
+			var identifiers = browser.GetFrameIdentifiers();
+			var deadline = DateTime.UtcNow.AddSeconds(5);
+			using (var focused = browser.FocusedFrame)
+			{
+				if (focused != null)
+				{
+					var text = await ReadSelectionAsync(focused);
+					if (!string.IsNullOrWhiteSpace(text)) return text;
+				}
+			}
+			foreach (var identifier in identifiers.Take(32))
+			{
+				if (DateTime.UtcNow >= deadline) break;
+				using (var frame = browser.GetFrameByIdentifier(identifier))
+				{
+					if (frame == null || !frame.IsValid) continue;
+					var text = await ReadSelectionAsync(frame);
+					if (!string.IsNullOrWhiteSpace(text)) return text;
+				}
+			}
+			return string.Empty;
+		}
+
+		private static async Task<string> ReadSelectionAsync(IFrame frame)
+		{
+			var evaluation = frame.EvaluateScriptAsync(@"(function () {
+  const element = document.activeElement;
+  if (element && element.tagName === 'INPUT' && element.type === 'password') return '';
+  if (element && (element.tagName === 'TEXTAREA' || (element.tagName === 'INPUT' && /^(text|search|url|tel|email)$/.test(element.type)))) {
+    const selected = element.value.substring(element.selectionStart || 0, element.selectionEnd || 0);
+    if (selected) return selected.slice(0, 10001);
+  }
+  return window.getSelection().toString().slice(0, 10001);
+})()");
+			if (await Task.WhenAny(evaluation, Task.Delay(2000)) != evaluation) return string.Empty;
+			var result = await evaluation;
+			return result.Success ? result.Result as string ?? string.Empty : string.Empty;
+		}
 		private readonly Clipboard clipboard;
 		private readonly ICefSharpControl control;
 		private readonly IContextMenuHandler contextMenuHandler;
@@ -58,8 +118,10 @@ namespace SafeExamBrowser.Browser
 			IKeyboardHandler keyboardHandler,
 			ILogger logger,
 			IRenderProcessMessageHandler renderProcessMessageHandler,
-			IRequestHandler requestHandler)
+			IRequestHandler requestHandler,
+			Func<IChatGptAssistant> assistantFactory = null)
 		{
+			this.assistantFactory = assistantFactory;
 			this.clipboard = clipboard;
 			this.control = control;
 			this.contextMenuHandler = contextMenuHandler;
@@ -77,6 +139,7 @@ namespace SafeExamBrowser.Browser
 
 		public void Destroy()
 		{
+			assistant?.Dispose();
 			if (!control.IsDisposed)
 			{
 				control.CloseDevTools();
@@ -116,6 +179,13 @@ namespace SafeExamBrowser.Browser
 
 		public void Initialize()
 		{
+			if (keyboardHandler is Handlers.KeyboardHandler shortcuts)
+			{
+				shortcuts.EnableChatGptShortcut = CanUseChatGpt;
+				shortcuts.ChatGptRequested += () => ChatGptRequested?.Invoke();
+				shortcuts.ChatGptQueryRequested += () => ChatGptQueryRequested?.Invoke();
+				shortcuts.ChatGptHideAnswerRequested += () => ChatGptHideAnswerRequested?.Invoke();
+			}
 			clipboard.Changed += Clipboard_Changed;
 
 			control.AddressChanged += (o, e) => AddressChanged?.Invoke(e.Address);

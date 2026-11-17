@@ -20,6 +20,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
         <Border x:Name="Toolbar" Grid.Row="0" BorderBrush="LightGray" BorderThickness="0,0,0,1" Margin="5,0">
             <Grid>
@@ -101,7 +102,55 @@
                 <ProgressBar Grid.Row="1" x:Name="ProgressBar" Background="Transparent" BorderThickness="0" Foreground="DodgerBlue" Height="2" Margin="0,0,0,-1" />
             </Grid>
         </Border>
-        <WindowsFormsHost Grid.Row="1" x:Name="BrowserControlHost" />
+        <Grid Grid.Row="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid Grid.Row="1">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition x:Name="ChatGptColumn" Width="0" />
+                </Grid.ColumnDefinitions>
+                <WindowsFormsHost x:Name="BrowserControlHost" />
+                <GridSplitter x:Name="ChatGptSplitter" Grid.Column="1" Width="5" HorizontalAlignment="Stretch" Visibility="Collapsed" ResizeDirection="Columns" ResizeBehavior="PreviousAndNext" />
+                <Grid x:Name="ChatGptPanel" Grid.Column="2" Visibility="Collapsed" Background="White">
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="*" />
+                    </Grid.RowDefinitions>
+                    <DockPanel Margin="8,5">
+                        <Button Content="×" ToolTip="Đóng khung" DockPanel.Dock="Right" Padding="6,2" Click="CloseChatGpt_Click" />
+                        <Button Content="−" ToolTip="Thu gọn, giữ cuộc trò chuyện" DockPanel.Dock="Right" Padding="6,2" Margin="4,0" Click="CollapseChatGpt_Click" />
+                        <Button Content="Tải lại" DockPanel.Dock="Right" Padding="6,2" Margin="4,0" Click="ReloadChatGpt_Click" />
+                        <TextBlock Text="ChatGPT" FontWeight="Bold" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBox x:Name="ChatGptQuestion" Grid.Row="1" Height="56" Margin="8,0" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" MaxLength="12000" AutomationProperties.Name="Câu hỏi đã chọn, có thể chỉnh sửa" />
+                    <DockPanel Grid.Row="2" Margin="8,5">
+                        <Button x:Name="PrepareChatGptButton" Content="Dán &amp; gửi" DockPanel.Dock="Right" Padding="8,4" Click="PrepareChatGpt_Click" />
+                        <ComboBox x:Name="ChatGptQuestionType" SelectedIndex="0" Margin="0,0,8,0" VerticalContentAlignment="Center" AutomationProperties.Name="Loại câu hỏi">
+                            <ComboBoxItem Content="Tự nhận diện" />
+                            <ComboBoxItem Content="Trắc nghiệm" />
+                            <ComboBoxItem Content="Tự luận" />
+                        </ComboBox>
+                    </DockPanel>
+                    <TextBlock x:Name="ChatGptStatus" Grid.Row="3" Margin="8,0,8,5" FontSize="11" MaxHeight="44" TextTrimming="CharacterEllipsis" ToolTip="{Binding Text, RelativeSource={RelativeSource Self}}" TextWrapping="Wrap" Text="Nhấn Dán &amp; gửi để đưa câu hỏi vào ô chat và gửi." />
+                    <Expander x:Name="ChatGptResult" Header="Kết quả chuẩn hóa" Grid.Row="4" Margin="8,0,8,5" IsExpanded="False">
+                        <StackPanel>
+                            <Button x:Name="CopyChatGptAnswerButton" Content="Sao chép" IsEnabled="False" HorizontalAlignment="Right" Margin="0,2,0,4" Padding="8,2" Click="CopyChatGptAnswer_Click" />
+                            <TextBox x:Name="ChatGptAnswerBox" ContextMenu="{x:Null}" IsReadOnly="True" AcceptsReturn="True" TextWrapping="Wrap" VerticalScrollBarVisibility="Auto" Height="72" AutomationProperties.Name="Câu trả lời đã chuẩn hóa" />
+                        </StackPanel>
+                    </Expander>
+                    <WindowsFormsHost x:Name="ChatGptControlHost" Grid.Row="5" />
+                </Grid>
+                <Button x:Name="RestoreChatGptButton" Grid.Column="2" Visibility="Collapsed" Content="›" FontSize="18" ToolTip="Mở lại khung ChatGPT" Height="32" VerticalAlignment="Top" Margin="2" Click="RestoreChatGpt_Click" />
+            </Grid>
+        </Grid>
         <Border x:Name="Findbar" Grid.Row="2" BorderBrush="LightGray" BorderThickness="0,1,0,0" Margin="5,0" Visibility="Collapsed">
             <Grid>
                 <Grid.ColumnDefinitions>
@@ -123,6 +172,12 @@
                     <fa:ImageAwesome Icon="Close" />
                 </Button>
             </Grid>
+        </Border>
+        <Border x:Name="ChoiceAnswerBadge" Grid.Row="3" HorizontalAlignment="Right"
+                Margin="8,4" Padding="12,4" CornerRadius="4" Background="#18324B"
+                Visibility="Collapsed" ToolTip="Ctrl + Shift + H để ẩn đáp án">
+            <TextBlock x:Name="ChoiceAnswerText" Foreground="White" FontSize="16" FontWeight="SemiBold"
+                       AutomationProperties.Name="Đáp án trắc nghiệm" />
         </Border>
     </Grid>
 </Window>

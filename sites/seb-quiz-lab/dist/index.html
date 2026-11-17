@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="vi">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bài kiểm tra thử · SEB Lab</title>
+<link rel="stylesheet" href="lab.css">
+<header><strong>SEB Lab</strong><span>Kiểm thử cục bộ</span><a href="/events" target="_blank" rel="noopener">Nhật ký JSON</a></header>
+<main>
+  <div class="intro"><p class="eyebrow">BÀI KIỂM TRA MẪU</p><h1>Kiểm tra hoạt động trong SEB</h1><p>Bắt đầu để ghi nhật ký. Chọn câu trả lời, thử thay đổi vùng focus hoặc quay lại trang, rồi đối chiếu sự kiện bên phải.</p></div>
+  <div class="layout">
+    <section aria-labelledby="quiz-title">
+      <div class="section-title"><h2 id="quiz-title">Câu hỏi</h2><span id="state" role="status">Chưa bắt đầu</span></div>
+      <button id="start">Bắt đầu lượt thử</button>
+      <form id="quiz" hidden>
+        <fieldset data-question="1"><legend>Câu 1 · Trắc nghiệm</legend>
+          <p>Thủ đô của Việt Nam là thành phố nào?</p>
+          <label><input type="radio" name="one" required> A. Huế</label>
+          <label><input type="radio" name="one"> B. Hà Nội</label>
+          <label><input type="radio" name="one"> C. Đà Nẵng</label>
+          <label><input type="radio" name="one"> D. Hải Phòng</label>
+        </fieldset>
+        <fieldset data-question="2"><legend>Câu 2 · Trắc nghiệm</legend>
+          <p>Kết quả của phép tính 7 × 8 là bao nhiêu?</p>
+          <label><input type="radio" name="two" required> A. 48</label>
+          <label><input type="radio" name="two"> B. 49</label>
+          <label><input type="radio" name="two"> C. 54</label>
+          <label><input type="radio" name="two"> D. 56</label>
+        </fieldset>
+        <fieldset data-question="3"><legend>Câu 3 · Tự luận</legend>
+          <label for="essay">Giải thích trong hai câu vì sao nước đá nổi trên nước lỏng.</label>
+          <textarea id="essay" rows="4" required></textarea>
+        </fieldset>
+        <button>Nộp bài thử</button>
+      </form>
+    </section>
+    <aside aria-labelledby="log-title">
+      <div class="section-title"><h2 id="log-title">Nhật ký lượt thử</h2></div>
+      <p class="note">Mô phỏng nhật ký Canvas Classic Quizzes. Trang ghi tín hiệu của chính nó. Mất focus không cho biết ứng dụng nào đã nhận focus.</p>
+      <p class="note">Phép đo bổ sung ghi Ctrl + Shift + J, K hoặc H nếu trang nhận được sự kiện bàn phím.</p>
+      <p id="connection" class="note" role="status"></p>
+      <ol id="log" aria-label="Sự kiện gần nhất"></ol>
+    </aside>
+  </div>
+</main>
+<script src="lab.js" defer></script>
+</html>

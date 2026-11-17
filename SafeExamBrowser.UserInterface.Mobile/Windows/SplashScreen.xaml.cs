@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2025 ETH Zürich, IT Services
  * 
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -14,6 +14,8 @@ using SafeExamBrowser.I18n.Contracts;
 using SafeExamBrowser.UserInterface.Contracts.Windows;
 using SafeExamBrowser.UserInterface.Contracts.Windows.Events;
 using SafeExamBrowser.UserInterface.Mobile.ViewModels;
+
+using SafeExamBrowser.UserInterface.Shared.Utilities;
 
 namespace SafeExamBrowser.UserInterface.Mobile.Windows
 {
@@ -136,7 +138,7 @@ namespace SafeExamBrowser.UserInterface.Mobile.Windows
 		{
 			if (appConfig != null)
 			{
-				InfoTextBlock.Inlines.Add(new Run($"Version {appConfig.ProgramInformationalVersion}") { Foreground = Brushes.DimGray });
+				InfoTextBlock.Inlines.Add(new Run($"Version {VersionLabel.Format(appConfig.ProgramInformationalVersion)}") { Foreground = Brushes.DimGray });
 				InfoTextBlock.Inlines.Add(new LineBreak());
 				InfoTextBlock.Inlines.Add(new LineBreak());
 				InfoTextBlock.Inlines.Add(new Run(appConfig.ProgramCopyright) { FontSize = 12 });

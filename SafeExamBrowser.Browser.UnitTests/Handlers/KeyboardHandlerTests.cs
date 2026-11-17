@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2025 ETH Zürich, IT Services
  * 
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -22,6 +22,73 @@ namespace SafeExamBrowser.Browser.UnitTests.Handlers
 		public void Initialize()
 		{
 			sut = new KeyboardHandler();
+		}
+
+		[TestMethod]
+		public void MustHideChoiceAnswerWithoutOpeningOrSending()
+		{
+			var hidden = 0;
+			var shortcut = false;
+			var modifiers = CefEventFlags.ControlDown | CefEventFlags.ShiftDown;
+			sut.EnableChatGptShortcut = true;
+			sut.ChatGptRequested += () => Assert.Fail("Unexpected open action");
+			sut.ChatGptQueryRequested += () => Assert.Fail("Unexpected send action");
+			sut.ChatGptHideAnswerRequested += () => hidden++;
+
+			Assert.IsTrue(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.H, 0, modifiers, false, ref shortcut));
+			sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.H, 1 << 30, modifiers, false, ref shortcut);
+			Assert.AreEqual(1, hidden);
+		}
+
+		[TestMethod]
+		public void MustSeparateOpenFromSelectedQuestionSubmission()
+		{
+			var opened = 0;
+			var queried = 0;
+			var shortcut = false;
+			var modifiers = CefEventFlags.ControlDown | CefEventFlags.ShiftDown;
+			sut.EnableChatGptShortcut = true;
+			sut.ChatGptRequested += () => opened++;
+			sut.ChatGptQueryRequested += () => queried++;
+			sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.J, 0, modifiers, false, ref shortcut);
+			Assert.AreEqual(1, opened);
+			Assert.AreEqual(0, queried);
+			sut.OnPreKeyEvent(null, null, KeyType.KeyUp, (int) Keys.J, 0, modifiers, false, ref shortcut);
+			sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.K, 0, modifiers, false, ref shortcut);
+			sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.K, 1 << 30, modifiers, false, ref shortcut);
+			Assert.AreEqual(1, opened);
+			Assert.AreEqual(1, queried);
+		}
+
+		[TestMethod]
+		public void MustOpenChatGptOncePerShortcutPress()
+		{
+			var count = 0;
+			var shortcut = false;
+			var modifiers = CefEventFlags.ControlDown | CefEventFlags.ShiftDown;
+			sut.EnableChatGptShortcut = true;
+			sut.ChatGptRequested += () => count++;
+			Assert.IsTrue(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.J, 0, modifiers, false, ref shortcut));
+			Assert.IsTrue(shortcut);
+			sut.OnPreKeyEvent(null, null, KeyType.KeyDown, (int) Keys.J, 0, modifiers, false, ref shortcut);
+			sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.J, 1 << 30, modifiers, false, ref shortcut);
+			Assert.AreEqual(1, count);
+			// Focus changed before key-up, so Chromium never saw it.
+			sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.J, 0, modifiers, false, ref shortcut);
+			Assert.AreEqual(2, count);
+		}
+
+		[TestMethod]
+		public void MustNotTreatOtherKeyCombinationsAsChatGptShortcut()
+		{
+			var count = 0;
+			var shortcut = false;
+			sut.ChatGptRequested += () => count++;
+			Assert.IsFalse(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.J, 0, CefEventFlags.ControlDown | CefEventFlags.ShiftDown, false, ref shortcut));
+			sut.EnableChatGptShortcut = true;
+			Assert.IsFalse(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.J, 0, CefEventFlags.ControlDown, false, ref shortcut));
+			Assert.IsFalse(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.J, 0, CefEventFlags.ControlDown | CefEventFlags.ShiftDown | CefEventFlags.AltDown, false, ref shortcut));
+			Assert.AreEqual(0, count);
 		}
 
 		[TestMethod]

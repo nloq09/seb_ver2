@@ -81,6 +81,8 @@
     <Compile Include="BrowserApplication.cs" />
     <Compile Include="BrowserWindow.cs" />
     <Compile Include="Clipboard.cs" />
+    <Compile Include="ChatGptAssistant.cs" />
+    <Compile Include="QuestionAnswerFormatter.cs" />
     <Compile Include="Events\ClipboardChangedEventHandler.cs" />
     <Compile Include="Events\DialogRequestedEventArgs.cs" />
     <Compile Include="Events\DialogRequestedEventHandler.cs" />

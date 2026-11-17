@@ -8,9 +8,12 @@
 
 using System;
 using System.Threading.Tasks;
+using System.Threading;
+using System.Text;
 using CefSharp;
 using SafeExamBrowser.Browser.Events;
 using SafeExamBrowser.Logging.Contracts;
+using SafeExamBrowser.Settings.Security;
 using BrowserSettings = SafeExamBrowser.Settings.Browser.BrowserSettings;
 
 namespace SafeExamBrowser.Browser
@@ -19,15 +22,46 @@ namespace SafeExamBrowser.Browser
 	{
 		private readonly ILogger logger;
 		private readonly BrowserSettings settings;
+		private readonly ClipboardPolicy policy;
 
 		internal string Content { get; private set; }
 
 		internal event ClipboardChangedEventHandler Changed;
 
-		internal Clipboard(ILogger logger, BrowserSettings settings)
+		internal Clipboard(ILogger logger, BrowserSettings settings, ClipboardPolicy? policy = null)
 		{
 			this.logger = logger;
 			this.settings = settings;
+			this.policy = policy ?? (settings.UseIsolatedClipboard ? ClipboardPolicy.Isolated : ClipboardPolicy.Block);
+		}
+
+		internal Task<bool> CopyAnswerAsync(string text)
+		{
+			if (policy == ClipboardPolicy.Block || string.IsNullOrWhiteSpace(text)) return Task.FromResult(false);
+			if (policy == ClipboardPolicy.Isolated)
+			{
+				if (!settings.UseIsolatedClipboard) return Task.FromResult(false);
+				Content = Convert.ToBase64String(Encoding.UTF8.GetBytes(text));
+				return Task.Run(() => { Changed?.Invoke(Guid.NewGuid().ToString()); return true; });
+			}
+			if (policy != ClipboardPolicy.Allow) return Task.FromResult(false);
+			var completion = new TaskCompletionSource<bool>();
+			var thread = new Thread(() =>
+			{
+				try
+				{
+					System.Windows.Forms.Clipboard.SetText(text, System.Windows.Forms.TextDataFormat.UnicodeText);
+					completion.TrySetResult(true);
+				}
+				catch (Exception)
+				{
+					logger.Warn("Could not write the normalized answer to the permitted system clipboard.");
+					completion.TrySetResult(false);
+				}
+			}) { IsBackground = true };
+			thread.SetApartmentState(ApartmentState.STA);
+			thread.Start();
+			return completion.Task;
 		}
 
 		internal void Update(JavascriptMessageReceivedEventArgs message)

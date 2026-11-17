@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2025 ETH Zürich, IT Services
  * 
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -10,6 +10,7 @@ using System;
 using System.ComponentModel;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Threading;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
@@ -46,6 +47,12 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 		private WindowClosingEventHandler closing;
 		private bool browserControlGetsFocusFromTaskbar;
 		private IInputElement tabKeyDownFocusElement;
+		private IChatGptAssistant chatGptAssistant;
+		private bool chatGptClosed;
+		private bool readingSelection;
+		private double chatGptWidth = 340;
+		private bool questionRunning;
+		private CancellationTokenSource questionCancellation;
 
 		private WindowSettings WindowSettings
 		{
@@ -252,6 +259,18 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 
 		private void BrowserWindow_KeyDown(object sender, KeyEventArgs e)
 		{
+			if ((e.Key == Key.J || e.Key == Key.K || e.Key == Key.H) && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift)
+				&& browserControl is IChatGptHost host && host.CanUseChatGpt)
+			{
+				e.Handled = true;
+				if (!e.IsRepeat)
+				{
+					if (e.Key == Key.J) OpenChatGpt();
+					else if (e.Key == Key.K) AskChatGpt();
+					else HideChoiceAnswer();
+				}
+				return;
+			}
 			if (e.Key == Key.Tab)
 			{
 				var hasShift = (Keyboard.Modifiers & ModifierKeys.Shift) == ModifierKeys.Shift;
@@ -282,6 +301,9 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 
 		private void BrowserWindow_KeyUp(object sender, KeyEventArgs e)
 		{
+			// Typing in the assistant must not trigger the exam browser's Home / F5 / find shortcuts.
+			if (ChatGptPanel.IsKeyboardFocusWithin) return;
+
 			if (e.Key == Key.F5)
 			{
 				ReloadRequested?.Invoke();
@@ -431,6 +453,33 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 
 		private void RegisterEvents()
 		{
+			ChatGptAnswerBox.CommandBindings.Add(new CommandBinding(ApplicationCommands.Copy,
+				(o, args) => { args.Handled = true; CopyChatGptAnswer_Click(o, new RoutedEventArgs()); },
+				(o, args) => { args.CanExecute = CopyChatGptAnswerButton.IsEnabled; args.Handled = true; }));
+			if (browserControl is IChatGptHost host && host.CanUseChatGpt)
+			{
+				host.ChatGptRequested += ChatGptShortcutRequested;
+				host.ChatGptQueryRequested += ChatGptQueryShortcutRequested;
+				host.ChatGptHideAnswerRequested += ChatGptHideAnswerShortcutRequested;
+			}
+			Closed += (o, args) =>
+			{
+				chatGptClosed = true;
+				questionCancellation?.Cancel();
+				if (browserControl is IChatGptHost closingHost)
+				{
+					closingHost.ChatGptRequested -= ChatGptShortcutRequested;
+					closingHost.ChatGptQueryRequested -= ChatGptQueryShortcutRequested;
+					closingHost.ChatGptHideAnswerRequested -= ChatGptHideAnswerShortcutRequested;
+				}
+				if (chatGptAssistant != null)
+				{
+					chatGptAssistant.StatusChanged -= ChatGpt_StatusChanged;
+					chatGptAssistant.HideAnswerRequested -= ChatGptHideAnswerShortcutRequested;
+					chatGptAssistant.Dispose();
+				}
+				ChatGptQuestion.Clear();
+			};
 			BackwardButton.Click += (o, args) => BackwardNavigationRequested?.Invoke();
 			Closed += (o, args) => closed?.Invoke();
 			Closing += BrowserWindow_Closing;
@@ -466,6 +515,213 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 			ZoomOutButton.Click += (o, args) => ZoomOutRequested?.Invoke();
 			ZoomResetButton.Click += (o, args) => ZoomResetRequested?.Invoke();
 			BrowserControlHost.GotKeyboardFocus += BrowserControlHost_GotKeyboardFocus;
+		}
+
+		private void ChatGptShortcutRequested()
+		{
+			if (!chatGptClosed && !Dispatcher.HasShutdownStarted)
+				Dispatcher.BeginInvoke((Action) (() => { if (!chatGptClosed) OpenChatGpt(); }));
+		}
+
+		private void ChatGptQueryShortcutRequested()
+		{
+			if (!chatGptClosed && !Dispatcher.HasShutdownStarted)
+				Dispatcher.BeginInvoke((Action) (() => { if (!chatGptClosed) AskChatGpt(); }));
+		}
+
+		private void ChatGptHideAnswerShortcutRequested()
+		{
+			if (!Dispatcher.HasShutdownStarted) Dispatcher.BeginInvoke((Action) HideChoiceAnswer);
+		}
+
+		private void HideChoiceAnswer()
+		{
+			if (chatGptClosed) return;
+			ChoiceAnswerBadge.Visibility = Visibility.Collapsed;
+			ChoiceAnswerText.Text = string.Empty;
+		}
+
+		private bool OpenChatGptPanel()
+		{
+			if (chatGptClosed || !(browserControl is IChatGptHost host) || !host.CanUseChatGpt) return false;
+			if (chatGptAssistant == null)
+			{
+				chatGptAssistant = host.CreateChatGptAssistant();
+				chatGptAssistant.StatusChanged += ChatGpt_StatusChanged;
+				chatGptAssistant.HideAnswerRequested += ChatGptHideAnswerShortcutRequested;
+				ChatGptControlHost.Child = (System.Windows.Forms.Control) chatGptAssistant.EmbeddableControl;
+			}
+			ExpandChatGpt();
+			return true;
+		}
+
+		private void OpenChatGpt()
+		{
+			try
+			{
+				if (OpenChatGptPanel() && !questionRunning)
+					ChatGptStatus.Text = "Đăng nhập tại đây nếu cần. Bôi đen đề và nhấn Ctrl + Shift + K để gửi câu hỏi.";
+			}
+			catch (Exception) { ChatGptStatus.Text = "Không thể mở khung ChatGPT. Hãy thử lại."; }
+		}
+
+		private async void AskChatGpt()
+		{
+			if (chatGptClosed || chatGptAssistant == null || !(browserControl is IChatGptHost host)) return;
+			if (questionRunning || readingSelection)
+			{
+				ChatGptStatus.Text = questionRunning
+					? "Đang xử lý câu trước. Nhấn Ctrl + Shift + K lại sau khi có kết quả."
+					: "Đang đọc vùng bôi đen...";
+				return;
+			}
+			readingSelection = true;
+			try
+			{
+				var selection = await host.GetSelectedTextAsync();
+				if (chatGptClosed) return;
+				if (string.IsNullOrWhiteSpace(selection) || selection.Length > 10000)
+				{
+					ChatGptStatus.Text = "Hãy bôi đen câu hỏi và các phương án, tối đa 10.000 ký tự, rồi nhấn Ctrl + Shift + K.";
+					return;
+				}
+				ChatGptQuestion.Text = selection.Trim();
+				readingSelection = false;
+				await RunQuestionAsync();
+			}
+			catch (OperationCanceledException) { }
+			catch (Exception)
+			{
+				if (!chatGptClosed) ChatGptStatus.Text = "Không thể đọc vùng chọn hoặc gửi câu hỏi. Hãy thử lại.";
+				logger.Warn("Could not start the selected-question request.");
+			}
+			finally { readingSelection = false; }
+		}
+
+		private async void PrepareChatGpt_Click(object sender, RoutedEventArgs e)
+		{
+			try { await RunQuestionAsync(); }
+			catch (Exception)
+			{
+				if (!chatGptClosed) ChatGptStatus.Text = "Không thể bắt đầu câu hỏi. Hãy thử lại.";
+			}
+		}
+
+		private async Task RunQuestionAsync()
+		{
+			if (chatGptClosed || questionRunning || chatGptAssistant == null) return;
+			var question = ChatGptQuestion.Text.Trim();
+			if (question.Length == 0 || question.Length > 10000)
+			{
+				ChatGptStatus.Text = "Hãy chọn hoặc nhập câu hỏi không quá 10.000 ký tự.";
+				return;
+			}
+			questionRunning = true;
+			var cancellation = new CancellationTokenSource();
+			questionCancellation = cancellation;
+			PrepareChatGptButton.IsEnabled = false;
+			CopyChatGptAnswerButton.IsEnabled = false;
+			HideChoiceAnswer();
+			ChatGptAnswerBox.Clear();
+			ChatGptResult.IsExpanded = false;
+			try
+			{
+				var kind = (ChatGptQuestionKind) ChatGptQuestionType.SelectedIndex;
+				var answer = await chatGptAssistant.AskQuestionAsync(question, kind, cancellation.Token);
+				if (chatGptClosed || cancellation.IsCancellationRequested) return;
+				ChatGptResult.IsExpanded = true;
+				if (!answer.IsValid)
+				{
+					ChatGptAnswerBox.Text = answer.Error;
+					ChatGptStatus.Text = answer.Error;
+					return;
+				}
+				if (answer.Kind == ChatGptQuestionKind.MultipleChoice &&
+					System.Text.RegularExpressions.Regex.IsMatch(answer.Text, @"\A[A-D](?:, [A-D])*\z"))
+				{
+					ChatGptResult.IsExpanded = false;
+					ChoiceAnswerText.Text = answer.Text;
+					ChoiceAnswerBadge.Visibility = Visibility.Visible;
+					ChatGptStatus.Text = "Ctrl + Shift + H để ẩn đáp án ở góc dưới.";
+					return;
+				}
+				ChatGptAnswerBox.Text = answer.Text;
+				ChatGptAnswerBox.Height = answer.Kind == ChatGptQuestionKind.MultipleChoice ? 36 : 80;
+				CopyChatGptAnswerButton.IsEnabled = true;
+				if (answer.Kind == ChatGptQuestionKind.Essay && browserControl is IChatGptHost host)
+				{
+					var copied = await host.CopyAnswerAsync(answer.Text);
+					if (!chatGptClosed) ChatGptStatus.Text = copied
+						? "Đã chuẩn hóa và sao chép câu tự luận. Dùng Ctrl + V tại nơi được phép dán trong SEB."
+						: "Đã có câu trả lời chuẩn hóa. Chưa sao chép được; hãy kiểm tra chính sách clipboard của phiên.";
+				}
+				else ChatGptStatus.Text = "Đáp án: " + answer.Text;
+			}
+			catch (OperationCanceledException)
+			{
+				if (!chatGptClosed) ChatGptStatus.Text = "Đã hủy chờ câu trả lời.";
+			}
+			catch (Exception)
+			{
+				if (!chatGptClosed) ChatGptStatus.Text = "Không thể hoàn tất câu hỏi. Kiểm tra khung ChatGPT rồi thử lại.";
+				logger.Warn("Could not complete or normalize the ChatGPT request.");
+			}
+			finally
+			{
+				questionRunning = false;
+				questionCancellation = null;
+				cancellation.Dispose();
+				if (!chatGptClosed) PrepareChatGptButton.IsEnabled = true;
+			}
+		}
+
+		private async void CopyChatGptAnswer_Click(object sender, RoutedEventArgs e)
+		{
+			if (!(browserControl is IChatGptHost host) || !CopyChatGptAnswerButton.IsEnabled) return;
+			try
+			{
+				var copied = await host.CopyAnswerAsync(ChatGptAnswerBox.Text);
+				if (!chatGptClosed) ChatGptStatus.Text = copied ? "Đã sao chép câu trả lời chuẩn hóa." : "Không thể sao chép theo chính sách clipboard hiện tại.";
+			}
+			catch (Exception) { if (!chatGptClosed) ChatGptStatus.Text = "Chưa sao chép được. Hãy thử lại."; }
+		}
+		private void ChatGpt_StatusChanged(string status)
+		{
+			if (!chatGptClosed && !Dispatcher.HasShutdownStarted)
+				Dispatcher.BeginInvoke((Action) (() => { if (!chatGptClosed) ChatGptStatus.Text = status; }));
+		}
+
+		private void CloseChatGpt_Click(object sender, RoutedEventArgs e)
+		{
+			ChatGptPanel.Visibility = ChatGptSplitter.Visibility = Visibility.Collapsed;
+			RestoreChatGptButton.Visibility = Visibility.Collapsed;
+			ChatGptColumn.Width = new GridLength(0);
+		}
+
+		private void ExpandChatGpt()
+		{
+			RestoreChatGptButton.Visibility = Visibility.Collapsed;
+			ChatGptPanel.Visibility = ChatGptSplitter.Visibility = Visibility.Visible;
+			ChatGptColumn.Width = new GridLength(Math.Min(chatGptWidth, Math.Max(160, ActualWidth * 0.45)));
+		}
+
+		private void CollapseChatGpt_Click(object sender, RoutedEventArgs e)
+		{
+			chatGptWidth = Math.Max(160, ChatGptColumn.ActualWidth);
+			ChatGptPanel.Visibility = ChatGptSplitter.Visibility = Visibility.Collapsed;
+			ChatGptColumn.Width = new GridLength(32);
+			RestoreChatGptButton.Visibility = Visibility.Visible;
+		}
+
+		private void RestoreChatGpt_Click(object sender, RoutedEventArgs e)
+		{
+			ExpandChatGpt();
+		}
+
+		private void ReloadChatGpt_Click(object sender, RoutedEventArgs e)
+		{
+			questionCancellation?.Cancel();
+			chatGptAssistant?.Reload();
 		}
 
 		private void MenuButton_Click(object sender, RoutedEventArgs e)

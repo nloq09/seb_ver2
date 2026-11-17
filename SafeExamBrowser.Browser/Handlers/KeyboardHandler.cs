@@ -1,4 +1,4 @@
-﻿/*
+/*
  * Copyright (c) 2025 ETH Zürich, IT Services
  * 
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -16,6 +16,12 @@ namespace SafeExamBrowser.Browser.Handlers
 	internal class KeyboardHandler : IKeyboardHandler
 	{
 		internal event ActionRequestedEventHandler FindRequested;
+		internal event ActionRequestedEventHandler ChatGptRequested;
+		internal event ActionRequestedEventHandler ChatGptQueryRequested;
+		internal event ActionRequestedEventHandler ChatGptHideAnswerRequested;
+		internal bool EnableChatGptShortcut { get; set; }
+		// Bit 30 of the Windows key message is set if the key was already down.
+		private const int PreviousKeyState = 1 << 30;
 		internal event ActionRequestedEventHandler HomeNavigationRequested;
 		internal event ActionRequestedEventHandler ReloadRequested;
 		internal event ActionRequestedEventHandler ZoomInRequested;
@@ -75,6 +81,24 @@ namespace SafeExamBrowser.Browser.Handlers
 
 		public bool OnPreKeyEvent(IWebBrowser browserControl, IBrowser browser, KeyType type, int keyCode, int nativeKeyCode, CefEventFlags modifiers, bool isSystemKey, ref bool isKeyboardShortcut)
 		{
+			if (EnableChatGptShortcut && (keyCode == (int) Keys.J || keyCode == (int) Keys.K || keyCode == (int) Keys.H))
+			{
+				if ((type == KeyType.RawKeyDown || type == KeyType.KeyDown)
+					&& modifiers.HasFlag(CefEventFlags.ControlDown) && modifiers.HasFlag(CefEventFlags.ShiftDown)
+					&& !modifiers.HasFlag(CefEventFlags.AltDown))
+				{
+					isKeyboardShortcut = true;
+					// Key-up can go to another control after the shortcut changes focus.
+					if (type == KeyType.RawKeyDown && (nativeKeyCode & PreviousKeyState) == 0)
+					{
+						if (keyCode == (int) Keys.J) ChatGptRequested?.Invoke();
+						else if (keyCode == (int) Keys.K) ChatGptQueryRequested?.Invoke();
+						else ChatGptHideAnswerRequested?.Invoke();
+					}
+					return true;
+				}
+			}
+
 			if (type == KeyType.KeyUp && keyCode == (int) Keys.F5)
 			{
 				ReloadRequested?.Invoke();

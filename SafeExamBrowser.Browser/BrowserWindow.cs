@@ -217,7 +217,11 @@ namespace SafeExamBrowser.Browser
 				keyboardHandler,
 				controlLogger,
 				renderHandler,
-				requestHandler);
+				requestHandler,
+				IsMainWindow ? (Func<IChatGptAssistant>) (() => new ChatGptAssistant(
+					url => !settings.Filter.ProcessMainRequests || requestFilter.Process(new Request { Url = url }) == FilterResult.Allow,
+					url => !settings.Filter.ProcessContentRequests || requestFilter.Process(new Request { Url = url }) == FilterResult.Allow,
+					message => logger.Info("ChatGPT: " + message))) : null);
 			Control.AddressChanged += Control_AddressChanged;
 			Control.LoadFailed += Control_LoadFailed;
 			Control.LoadingStateChanged += Control_LoadingStateChanged;
