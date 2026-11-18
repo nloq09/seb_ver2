@@ -44,6 +44,7 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 		private const int CHAT_QUERY = 2;
 		private const int CHAT_HIDE = 3;
 		private const int CHAT_ESSAY = 4;
+		private const int CHAT_LOGIN = 5;
 
 		[DllImport("user32.dll")]
 		private static extern bool RegisterHotKey(IntPtr window, int id, uint modifiers, uint key);
@@ -278,13 +279,14 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 
 		private void BrowserWindow_KeyDown(object sender, KeyEventArgs e)
 		{
-			if (!chatHotKeysRegistered && (e.Key == Key.J || e.Key == Key.K || e.Key == Key.Y || e.Key == Key.H) && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift)
+			if (!chatHotKeysRegistered && (e.Key == Key.J || e.Key == Key.K || e.Key == Key.Y || e.Key == Key.H || e.Key == Key.U) && Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift)
 				&& browserControl is IChatGptHost host && host.CanUseChatGpt)
 			{
 				e.Handled = true;
 				if (!e.IsRepeat)
 				{
 					if (e.Key == Key.J) OpenChatGpt();
+					else if (e.Key == Key.U) BeginChatGptLogin();
 					else if (e.Key == Key.K) AskChatGpt(ChatGptQuestionKind.MultipleChoice);
 					else if (e.Key == Key.Y) AskChatGpt(ChatGptQuestionKind.Essay);
 					else HideChoiceAnswer();
@@ -481,6 +483,7 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 			chatHotKeysRegistered = RegisterHotKey(handle, CHAT_OPEN, CHAT_MODIFIERS, 'J')
 				&& RegisterHotKey(handle, CHAT_QUERY, CHAT_MODIFIERS, 'K')
 				&& RegisterHotKey(handle, CHAT_ESSAY, CHAT_MODIFIERS, 'Y')
+				&& RegisterHotKey(handle, CHAT_LOGIN, CHAT_MODIFIERS, 'U')
 				&& RegisterHotKey(handle, CHAT_HIDE, CHAT_MODIFIERS, 'H');
 			if (!chatHotKeysRegistered)
 			{
@@ -498,6 +501,7 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 			UnregisterHotKey(handle, CHAT_OPEN);
 			UnregisterHotKey(handle, CHAT_QUERY);
 			UnregisterHotKey(handle, CHAT_ESSAY);
+			UnregisterHotKey(handle, CHAT_LOGIN);
 			UnregisterHotKey(handle, CHAT_HIDE);
 			chatHotKeySource.RemoveHook(ChatHotKeyMessage);
 			chatHotKeySource = null;
@@ -512,6 +516,7 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 				case CHAT_OPEN: ChatGptShortcutRequested(); break;
 				case CHAT_QUERY: ChatGptQueryShortcutRequested(); break;
 				case CHAT_ESSAY: ChatGptEssayShortcutRequested(); break;
+				case CHAT_LOGIN: ChatGptLoginShortcutRequested(); break;
 				case CHAT_HIDE: ChatGptHideAnswerShortcutRequested(); break;
 				default: return IntPtr.Zero;
 			}
@@ -536,6 +541,7 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 				Activated += (o, args) => RegisterChatHotKeys();
 				Deactivated += (o, args) => UnregisterChatHotKeys();
 				host.ChatGptRequested += ChatGptShortcutRequested;
+				host.ChatGptLoginRequested += ChatGptLoginShortcutRequested;
 				host.ChatGptQueryRequested += ChatGptQueryShortcutRequested;
 				host.ChatGptEssayRequested += ChatGptEssayShortcutRequested;
 				host.ChatGptHideAnswerRequested += ChatGptHideAnswerShortcutRequested;
@@ -549,6 +555,7 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 				if (browserControl is IChatGptHost closingHost)
 				{
 					closingHost.ChatGptRequested -= ChatGptShortcutRequested;
+					closingHost.ChatGptLoginRequested -= ChatGptLoginShortcutRequested;
 					closingHost.ChatGptQueryRequested -= ChatGptQueryShortcutRequested;
 					closingHost.ChatGptEssayRequested -= ChatGptEssayShortcutRequested;
 					closingHost.ChatGptHideAnswerRequested -= ChatGptHideAnswerShortcutRequested;
@@ -604,6 +611,27 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 				Dispatcher.BeginInvoke((Action) (() => { if (!chatGptClosed) OpenChatGpt(); }));
 		}
 
+		private void ChatGptLoginShortcutRequested()
+		{
+			if (!chatGptClosed && !Dispatcher.HasShutdownStarted)
+				Dispatcher.BeginInvoke((Action) (() => { if (!chatGptClosed) BeginChatGptLogin(); }));
+		}
+
+		private void BeginChatGptLogin()
+		{
+			if (chatGptClosed) return;
+			if (questionRunning)
+			{
+				ChatGptStatus.Text = "Đang xử lý câu trước. Nhấn Ctrl + Shift + U sau khi có kết quả để đăng nhập.";
+				return;
+			}
+			try
+			{
+				if (OpenChatGptPanel()) chatGptAssistant.BeginLogin();
+			}
+			catch (Exception) { ChatGptStatus.Text = "Không thể bắt đầu đăng nhập. Nhấn Ctrl + Shift + U để thử lại."; }
+		}
+
 		private void ChatGptQueryShortcutRequested()
 		{
 			if (!chatGptClosed && !Dispatcher.HasShutdownStarted)
@@ -639,7 +667,7 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 					chatGptAssistant.StatusChanged += ChatGpt_StatusChanged;
 					chatGptAssistant.QuestionSent += ChatGpt_QuestionSent;
 					ChatGptControlHost.Content = chatGptAssistant.EmbeddableControl;
-					ChatGptStatus.Text = "ChatGPT đang tải. Bôi đen đề, nhấn Ctrl + Shift + K cho trắc nghiệm hoặc Ctrl + Shift + Y cho tự luận.";
+					ChatGptStatus.Text = "ChatGPT đang tải. Ctrl + Shift + U để đăng nhập; K cho trắc nghiệm, Y cho tự luận (giữ Ctrl + Shift).";
 				}
 				return true;
 			}
@@ -663,7 +691,7 @@ namespace SafeExamBrowser.UserInterface.Desktop.Windows
 			try
 			{
 				if (OpenChatGptPanel() && !questionRunning)
-					ChatGptStatus.Text = "Bôi đen đề, nhấn Ctrl + Shift + K cho trắc nghiệm hoặc Ctrl + Shift + Y cho tự luận.";
+					ChatGptStatus.Text = "Ctrl + Shift + U để đăng nhập. Bôi đen đề, nhấn Ctrl + Shift + K cho trắc nghiệm hoặc Ctrl + Shift + Y cho tự luận.";
 			}
 			catch (Exception) { ChatGptStatus.Text = "Không thể mở khung ChatGPT. Hãy thử lại."; }
 		}

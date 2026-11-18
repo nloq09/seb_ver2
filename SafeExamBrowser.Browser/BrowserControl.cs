@@ -25,6 +25,7 @@ namespace SafeExamBrowser.Browser
 		private IChatGptAssistant assistant;
 		public bool CanUseChatGpt => assistantFactory != null;
 		public event Action ChatGptRequested;
+		public event Action ChatGptLoginRequested;
 		public event Action ChatGptQueryRequested;
 		public event Action ChatGptEssayRequested;
 		public event Action ChatGptHideAnswerRequested;
@@ -184,6 +185,7 @@ namespace SafeExamBrowser.Browser
 			{
 				shortcuts.EnableChatGptShortcut = CanUseChatGpt;
 				shortcuts.ChatGptRequested += () => ChatGptRequested?.Invoke();
+				shortcuts.ChatGptLoginRequested += () => ChatGptLoginRequested?.Invoke();
 				shortcuts.ChatGptQueryRequested += () => ChatGptQueryRequested?.Invoke();
 				shortcuts.ChatGptEssayRequested += () => ChatGptEssayRequested?.Invoke();
 				shortcuts.ChatGptHideAnswerRequested += () => ChatGptHideAnswerRequested?.Invoke();

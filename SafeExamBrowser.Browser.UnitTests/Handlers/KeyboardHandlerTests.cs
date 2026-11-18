@@ -25,6 +25,32 @@ namespace SafeExamBrowser.Browser.UnitTests.Handlers
 		}
 
 		[TestMethod]
+		public void MustLoginOnlyOnItsOwnShortcutWithoutSending()
+		{
+			var logins = 0;
+			var shortcut = false;
+			var modifiers = CefEventFlags.ControlDown | CefEventFlags.ShiftDown;
+			sut.ChatGptLoginRequested += () => logins++;
+			sut.ChatGptRequested += () => Assert.Fail("Login must not use the open action");
+			sut.ChatGptQueryRequested += () => Assert.Fail("Login must not send a question");
+			sut.ChatGptEssayRequested += () => Assert.Fail("Login must not send an essay");
+			sut.ChatGptHideAnswerRequested += () => Assert.Fail("Login must not hide an answer");
+			Assert.IsFalse(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.U, 0, modifiers, false, ref shortcut));
+			sut.EnableChatGptShortcut = true;
+			Assert.IsFalse(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.U, 0, CefEventFlags.ControlDown, false, ref shortcut));
+			Assert.IsFalse(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.U, 0, modifiers | CefEventFlags.AltDown, false, ref shortcut));
+			Assert.AreEqual(0, logins);
+			Assert.IsTrue(sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.U, 0, modifiers, false, ref shortcut));
+			Assert.IsTrue(shortcut);
+			sut.OnPreKeyEvent(null, null, KeyType.KeyDown, (int) Keys.U, 0, modifiers, false, ref shortcut);
+			sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.U, 1 << 30, modifiers, false, ref shortcut);
+			sut.OnKeyEvent(null, null, KeyType.KeyUp, (int) Keys.U, 0, modifiers, false);
+			Assert.AreEqual(1, logins);
+			sut.OnPreKeyEvent(null, null, KeyType.RawKeyDown, (int) Keys.U, 0, modifiers, false, ref shortcut);
+			Assert.AreEqual(2, logins);
+		}
+
+		[TestMethod]
 		public void MustHideChoiceAnswerWithoutOpeningOrSending()
 		{
 			var hidden = 0;

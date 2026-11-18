@@ -22,6 +22,7 @@ namespace SafeExamBrowser.UserInterface.Contracts.Browser
 		Task<bool> PreparePromptAsync(string prompt);
 		Task<bool> SendPreparedPromptAsync(string prompt);
 		Task<ChatGptAnswer> AskQuestionAsync(string question, ChatGptQuestionKind kind, CancellationToken cancellationToken);
+		void BeginLogin();
 		void Reload();
 	}
 
@@ -30,6 +31,7 @@ namespace SafeExamBrowser.UserInterface.Contracts.Browser
 	{
 		bool CanUseChatGpt { get; }
 		event Action ChatGptRequested;
+		event Action ChatGptLoginRequested;
 		event Action ChatGptQueryRequested;
 		event Action ChatGptEssayRequested;
 		event Action ChatGptHideAnswerRequested;
